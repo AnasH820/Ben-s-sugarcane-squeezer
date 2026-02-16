@@ -20,29 +20,29 @@ body { color:white; background:black; overflow:hidden; touch-action:none; }
 #status-progress { bottom:10%; width:50%; margin:0 auto; }
 #status-notice { background-color:#5b3943; border-radius:.5rem; border:1px solid #9b3943; color:#e0e0e0; font-family:'Noto Sans', 'Droid Sans', Arial, sans-serif; line-height:1.3; margin:0 2rem; overflow:hidden; padding:1rem; text-align:center; z-index:1; }
 </style>
-<link rel="icon" href="Ben`s Sugarcane Squeezer.icon.png" />
-<link rel="apple-touch-icon" href="Ben`s Sugarcane Squeezer.apple-touch-icon.png"/>
+<link rel="icon" href="Bens_Sugarcane_Squeezer.icon.png" />
+<link rel="apple-touch-icon" href="Bens_Sugarcane_Squeezer.apple-touch-icon.png"/>
 </head>
 <body>
 <canvas id="canvas">Your browser does not support the canvas tag.</canvas>
 
 <div id="status">
-  <img id="status-splash" class="show-image--true fullsize--false use-filter--true" src="Ben`s Sugarcane Squeezer.png" alt="">
+  <img id="status-splash" class="show-image--true fullsize--false use-filter--true" src="Bens_Sugarcane_Squeezer.png" alt="">
   <progress id="status-progress"></progress>
   <div id="status-notice"></div>
 </div>
 
-<script src="Ben`s Sugarcane Squeezer.js"></script>
+<script src="Bens_Sugarcane_Squeezer.js"></script>
 <script>
 const GODOT_CONFIG = {
     args: [],
     canvasResizePolicy: 2,
     ensureCrossOriginIsolationHeaders: true,
-    executable: "Ben`s Sugarcane Squeezer",
+    executable: "Bens_Sugarcane_Squeezer",
     experimentalVK: false,
     fileSizes: {
-        "Ben`s Sugarcane Squeezer.pck": 5338192,
-        "Ben`s Sugarcane Squeezer.wasm": 43699190
+        "Bens_Sugarcane_Squeezer.pck": 5338192,
+        "Bens_Sugarcane_Squeezer.wasm": 43699190
     },
     focusCanvas: true,
     gdextensionLibs: []
@@ -51,18 +51,45 @@ const GODOT_CONFIG = {
 const GODOT_THREADS_ENABLED = false;
 
 const wasmChunks = [
-    "Ben_s_Sugarcane_Squeezer.wasm.part1",
-    "Ben_s_Sugarcane_Squeezer.wasm.part2"
+    "Bens_Sugarcane_Squeezer.wasm.part1",
+    "Bens_Sugarcane_Squeezer.wasm.part2"
 ];
 
-// Function to fetch and merge chunks
+// Helper to concatenate Uint8Arrays
+function concatUint8Arrays(arrays) {
+    let totalLength = arrays.reduce((sum, arr) => sum + arr.length, 0);
+    let result = new Uint8Array(totalLength);
+    let offset = 0;
+    for (let arr of arrays) {
+        result.set(arr, offset);
+        offset += arr.length;
+    }
+    return result;
+}
+
+// Fetch and merge WASM chunks with progress
 async function fetchWasmChunks(chunks) {
     const buffers = [];
     for (const url of chunks) {
         const res = await fetch(url);
         if (!res.ok) throw new Error(`Failed to load ${url}`);
-        buffers.push(await res.arrayBuffer());
+        const reader = res.body.getReader();
+        const contentLength = +res.headers.get('Content-Length') || 0;
+        let receivedLength = 0;
+        const chunksArray = [];
+        while(true) {
+            const {done, value} = await reader.read();
+            if (done) break;
+            chunksArray.push(value);
+            receivedLength += value.length;
+            // Update progress
+            statusProgress.value = contentLength ? receivedLength : 0;
+            statusProgress.max = contentLength ? contentLength : 1;
+            statusNotice.textContent = `Loading ${url}: ${contentLength ? Math.floor((receivedLength/contentLength)*100) : '?'}%`;
+        }
+        buffers.push(concatUint8Arrays(chunksArray));
     }
+    // merge all chunk buffers
     let totalLength = buffers.reduce((sum, buf) => sum + buf.byteLength, 0);
     let merged = new Uint8Array(totalLength);
     let offset = 0;
@@ -103,6 +130,7 @@ async function fetchWasmChunks(chunks) {
                 if (current > 0 && total > 0) {
                     statusProgress.value = current;
                     statusProgress.max = total;
+                    statusNotice.textContent = `Loading engine: ${Math.floor((current/total)*100)}%`;
                 } else {
                     statusProgress.removeAttribute('value');
                     statusProgress.removeAttribute('max');
